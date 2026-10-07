@@ -1,0 +1,50 @@
+name: SkillTrack CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://api.example.com/api/v1
+        run: npm run build
+
+      - name: Build backend production image
+        run: docker build --file backend/Dockerfile --tag skilltrack-backend:ci backend
+
+      - name: Build frontend production image
+        run: docker build --file frontend/Dockerfile --build-arg VITE_API_BASE_URL=https://api.example.com/api/v1 --tag skilltrack-frontend:ci frontend
