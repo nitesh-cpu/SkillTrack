@@ -67,9 +67,7 @@ function getConfig(env = process.env) {
   if ((env.NODE_ENV || 'development') === 'production' && resetUrl.protocol !== 'https:') {
     throw new Error('PASSWORD_RESET_URL must use HTTPS in production.');
   }
-  if ((env.NODE_ENV || 'development') === 'production' && !smtpConfigured) {
-    throw new Error('SMTP_HOST and SMTP_FROM must be configured in production to deliver password reset emails.');
-  }
+
 
   return {
     port,
