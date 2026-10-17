@@ -14,6 +14,7 @@ const registerValidation = [
 const loginValidation = [
   body('email').isString().trim().isLength({ max: 254 }).isEmail().withMessage('A valid email address is required.').normalizeEmail(),
   body('password').isString().notEmpty().isByteLength({ max: 72 }).withMessage('Email or password is incorrect.'),
+  body('role').isIn(['STUDENT', 'MENTOR', 'ADMIN']).withMessage('Choose a valid sign-in role.'),
   validateRequest,
 ];
 const forgotValidation = [

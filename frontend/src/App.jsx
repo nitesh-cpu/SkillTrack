@@ -19,7 +19,6 @@ import ResultsPage from './pages/ResultsPage';
 import LearningManagementPage from './pages/LearningManagementPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
-import RegisterPage from './pages/auth/RegisterPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import MentorDashboardPage from './pages/mentor/DashboardPage';
 import ReviewsPage from './pages/mentor/ReviewsPage';
@@ -77,7 +76,6 @@ export default function App() {
         _jsx(Route, { path: "/", element: _jsx(HomeRedirect, {}) }),
         _jsxs(Route, { element: _jsx(PublicOnly, {}), children: [
             _jsx(Route, { path: "/login", element: _jsx(LoginPage, {}) }),
-            _jsx(Route, { path: "/register", element: _jsx(RegisterPage, {}) }),
             _jsx(Route, { path: "/forgot-password", element: _jsx(ForgotPasswordPage, {}) }),
             _jsx(Route, { path: "/reset-password", element: _jsx(ResetPasswordPage, {}) }),
         ] }),

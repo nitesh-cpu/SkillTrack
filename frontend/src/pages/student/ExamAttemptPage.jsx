@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Clock3, Maximize, Send } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, Clock3, Maximize, Mic, Send, ShieldCheck } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Notice, PageHeader, QueryState } from '../../components/Workspace';
@@ -13,9 +13,16 @@ function clockString(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 }
 
+const DEFAULT_SECURITY = {
+  requireFullscreen: true,
+  requireCamera: true,
+  requireMicrophone: true,
+  maxViolations: 1,
+  violationAction: 'AUTO_SUBMIT',
+};
+
 export default function ExamAttemptPage() {
   const { attemptId } = useParams();
-  const navigate = useNavigate();
   const query = useApi(() => api.getStudentExamAttempt(attemptId), [attemptId]);
   const attempt = query.data;
   const [current, setCurrent] = useState(0);
@@ -33,8 +40,19 @@ export default function ExamAttemptPage() {
   const finishing = useRef(false);
   const activityTimestamps = useRef(new Map());
   const fullscreenEntered = useRef(false);
+  const mediaStream = useRef(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [activityCount, setActivityCount] = useState(0);
+  const [secureReady, setSecureReady] = useState(false);
+  const security = attempt?.security || attempt?.exam?.security || DEFAULT_SECURITY;
+  const requiresSecureMode = security.requireFullscreen || security.requireCamera || security.requireMicrophone;
+
+  function stopMedia() {
+    mediaStream.current?.getTracks().forEach(track => track.stop());
+    mediaStream.current = null;
+  }
+
+  useEffect(() => () => stopMedia(), []);
 
   useEffect(() => {
     if (!query.data) return;
@@ -47,13 +65,39 @@ export default function ExamAttemptPage() {
     };
     updateRemaining();
     setTimerReady(true);
+    setSecureReady(!requiresSecureMode);
     if (query.data.status !== 'IN_PROGRESS') {
       setSubmitted(true);
       return undefined;
     }
     const interval = window.setInterval(updateRemaining, 1000);
     return () => window.clearInterval(interval);
-  }, [query.data]);
+  }, [query.data, requiresSecureMode]);
+
+  async function enterSecureMode() {
+    setError('');
+    try {
+      if (security.requireCamera || security.requireMicrophone) {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera and microphone access are not supported by this browser.');
+        mediaStream.current = await navigator.mediaDevices.getUserMedia({
+          video: security.requireCamera,
+          audio: security.requireMicrophone,
+        });
+      }
+      if (security.requireFullscreen && !document.fullscreenElement) {
+        if (!document.documentElement.requestFullscreen) throw new Error('Fullscreen mode is not supported by this browser.');
+        await document.documentElement.requestFullscreen();
+      }
+      setSecureReady(true);
+    } catch (reason) {
+      stopMedia();
+      setError(reason instanceof Error ? reason.message : 'Camera, microphone, and fullscreen access are required.');
+      if (attempt?.id) {
+        if (security.requireCamera) void api.recordStudentExamActivity(attempt.id, 'CAMERA_DENIED');
+        if (security.requireMicrophone) void api.recordStudentExamActivity(attempt.id, 'MICROPHONE_DENIED');
+      }
+    }
+  }
 
   useEffect(() => {
     if (!attempt || attempt.status !== 'IN_PROGRESS' || submitted) return undefined;
@@ -66,6 +110,11 @@ export default function ExamAttemptPage() {
       try {
         const activity = await api.recordStudentExamActivity(attempt.id, type);
         setActivityCount(activity.suspiciousActivityCount);
+        if (activity.autoSubmitted) {
+          setSubmitted(true);
+          setNotice('Your exam was submitted after the secure-exam violation limit was reached.');
+          stopMedia();
+        }
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : 'Could not record exam activity.');
       }
@@ -77,7 +126,10 @@ export default function ExamAttemptPage() {
       const isFullscreen = Boolean(document.fullscreenElement);
       setFullscreen(isFullscreen);
       if (isFullscreen) fullscreenEntered.current = true;
-      else if (fullscreenEntered.current) void recordActivity('FULLSCREEN_EXITED');
+      else if (fullscreenEntered.current) {
+        if (security.requireFullscreen) setSecureReady(false);
+        void recordActivity('FULLSCREEN_EXITED');
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -85,7 +137,7 @@ export default function ExamAttemptPage() {
       document.removeEventListener('visibilitychange', handleVisibility);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, [attempt?.id, attempt?.status, submitted]);
+  }, [attempt?.id, attempt?.status, submitted, security.requireFullscreen]);
 
   function flushAnswers() {
     const pending = Array.from(pendingAnswers.current.values());
@@ -185,9 +237,10 @@ export default function ExamAttemptPage() {
       <QueryState loading={query.loading} error={query.error} onRetry={query.reload} />
       {error && <Notice kind="error">{error}</Notice>}
       {notice && <Notice>{notice}</Notice>}
-      {attempt && !submitted && <div className="alert alert-warning" role="status"><AlertTriangle size={16} />Tab or window changes are recorded for review but will not automatically fail your exam. Recorded events: {activityCount}.</div>}
+      {attempt && !submitted && <div className="alert alert-warning" role="status"><AlertTriangle size={16} />Secure-exam violations are recorded. Reaching {security.maxViolations} violation{security.maxViolations === 1 ? '' : 's'} will {security.violationAction === 'AUTO_SUBMIT' ? 'submit the exam automatically' : 'flag the attempt for review'}. Recorded events: {activityCount}.</div>}
       {submitted
         ? <Card className="exam-submitted"><Check size={24} /><h3>Exam submitted</h3><p className="muted">Your response has been received. Results will be available after evaluation.</p><Link className="button button-primary" to="/student/exams">Return to my exams</Link></Card>
+        : attempt && !secureReady && requiresSecureMode ? <Card className="secure-exam-gate"><ShieldCheck size={28} /><h3>Secure exam check</h3><p className="muted">Before the questions open, allow the required camera, microphone, and fullscreen access. Leaving fullscreen or switching tabs is recorded as a violation.</p><div className="secure-check-list"><span><Maximize size={15} /> {security.requireFullscreen ? 'Fullscreen required' : 'Fullscreen optional'}</span><span><Camera size={15} /> {security.requireCamera ? 'Camera required' : 'Camera optional'}</span><span><Mic size={15} /> {security.requireMicrophone ? 'Microphone required' : 'Microphone optional'}</span></div><Button onClick={enterSecureMode}><Maximize size={15} /> Enter secure exam</Button></Card>
         : attempt && question && <div className="exam-workspace">
           <Card className="exam-question-card">
             <div className="exam-question-toolbar"><span className="eyebrow">QUESTION {question.number} OF {attempt.questions.length}</span><span className="muted">{question.marks} marks · {question.difficulty}</span></div>
@@ -212,7 +265,7 @@ export default function ExamAttemptPage() {
             <Button busy={submitting} onClick={() => window.confirm('Submit your exam now? You cannot change your answers after submission.') && submitExam()}><Send size={15} /> Submit exam</Button>
           </Card>
         </div>}
-      {attempt && !submitted && <p className="muted exam-autosave-note">Your answers are autosaved to your account. Keep this page open until your exam is submitted.</p>}
+      {attempt && !submitted && secureReady && <><video ref={element => { if (element && mediaStream.current) element.srcObject = mediaStream.current; }} className="secure-camera-preview" autoPlay muted playsInline aria-label="Secure exam camera preview" /><p className="muted exam-autosave-note">Your answers are autosaved to your account. Keep this page open until your exam is submitted.</p></>}
     </>
   );
 }

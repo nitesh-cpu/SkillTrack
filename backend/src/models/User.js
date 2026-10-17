@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true, select: false },
   authVersion: { type: Number, default: 0, select: false },
   role: { type: String, enum: ['STUDENT', 'MENTOR', 'ADMIN'], default: 'STUDENT', required: true },
+  batch: { type: String, trim: true, default: '', maxlength: 100 },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

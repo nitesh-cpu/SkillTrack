@@ -10,6 +10,18 @@ const { writeAudit } = require('../middleware/auditMiddleware');
 const { recalculateForUser } = require('./scoringService');
 const { AppError } = require('../utils/errors');
 
+const DEFAULT_SECURITY = Object.freeze({
+  requireFullscreen: true,
+  requireCamera: true,
+  requireMicrophone: true,
+  maxViolations: 1,
+  violationAction: 'AUTO_SUBMIT',
+});
+
+function securityPolicy(exam) {
+  return { ...DEFAULT_SECURITY, ...(exam?.security || DEFAULT_SECURITY) };
+}
+
 function safeAttempt(attempt, exam) {
   if (!exam) throw new AppError('Exam details are unavailable for this attempt.', 409);
   const answers = new Map(attempt.answers.map(entry => [String(entry.questionId), entry.answer]));
@@ -24,6 +36,7 @@ function safeAttempt(attempt, exam) {
       passingMarks: exam.passingMarks,
       startAt: exam.startAt,
       endAt: exam.endAt,
+      security: securityPolicy(exam),
     },
     questions: attempt.questions.map((question, index) => ({
       id: String(question.questionId),
@@ -394,7 +407,7 @@ async function saveAnswer(studentId, attemptId, { questionId, answer }) {
 }
 
 async function recordActivity(studentId, attemptId, type) {
-  if (!['TAB_HIDDEN', 'FULLSCREEN_EXITED'].includes(type)) throw new AppError('Activity type is invalid.', 400);
+  if (!['TAB_HIDDEN', 'FULLSCREEN_EXITED', 'CAMERA_DENIED', 'MICROPHONE_DENIED'].includes(type)) throw new AppError('Activity type is invalid.', 400);
   const attempt = await ownedAttempt(studentId, attemptId);
   const now = new Date();
   if (attempt.status !== 'IN_PROGRESS' || attempt.expiresAt <= now) {
@@ -425,6 +438,12 @@ async function recordActivity(studentId, attemptId, type) {
     }
     return { suspiciousActivityCount: current.suspiciousActivityCount || 0, recorded: false };
   }
+  const exam = await Exam.findById(attempt.examId).select('security').lean();
+  const policy = securityPolicy(exam);
+  const autoSubmitted = type === 'FULLSCREEN_EXITED'
+    || (policy.violationAction === 'AUTO_SUBMIT'
+      && recorded.suspiciousActivityCount >= policy.maxViolations);
+  if (autoSubmitted) await finalizeAttempt(recorded, true);
   await writeAudit({
     actorId: studentId,
     action: 'EXAM_ACTIVITY_RECORDED',
@@ -432,7 +451,7 @@ async function recordActivity(studentId, attemptId, type) {
     entityId: attemptId,
     metadata: { type, suspiciousActivityCount: recorded.suspiciousActivityCount },
   });
-  return { suspiciousActivityCount: recorded.suspiciousActivityCount, recorded: true };
+  return { suspiciousActivityCount: recorded.suspiciousActivityCount, recorded: true, autoSubmitted };
 }
 
 async function submitAttempt(studentId, attemptId) {
@@ -493,6 +512,12 @@ async function listResults(actor, { page = 1, limit = 25 } = {}) {
       result: attempt.result,
       suspiciousActivityCount: attempt.suspiciousActivityCount || 0,
       activityEvents: attempt.activityEvents || [],
+      answers: attempt.questions.map(question => ({
+        questionId: String(question.questionId),
+        question: question.question,
+        questionType: question.questionType,
+        answer: attempt.answers.find(answer => String(answer.questionId) === String(question.questionId))?.answer || '',
+      })),
     })),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   };

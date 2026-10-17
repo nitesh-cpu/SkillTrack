@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { ArrowLeft, Boxes, Eye, EyeOff, KeyRound, Mail, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Boxes, Eye, EyeOff, GraduationCap, KeyRound, Mail, ShieldCheck, Sparkles, UserRoundCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ROLE_HOME } from '../../utils/constants';
@@ -14,6 +14,7 @@ function AuthFrame({ children, mode }) {
 export function LoginPage() {
     const { user, login } = useAuth();
     const navigate = useNavigate();
+    const [role, setRole] = useState('student');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [visible, setVisible] = useState(false);
@@ -21,17 +22,23 @@ export function LoginPage() {
     const [busy, setBusy] = useState(false);
     if (user)
         return _jsx(Navigate, { to: ROLE_HOME[user.role], replace: true });
+    const isAdminLogin = role === 'admin';
     async function submitCredentials(targetEmail, targetPass) {
         setEmail(targetEmail);
         setPassword(targetPass);
         setError('');
         setBusy(true);
         try {
-            const authenticated = await login({ email: targetEmail, password: targetPass });
+            const authenticated = await login({ email: targetEmail, password: targetPass, role });
             navigate(ROLE_HOME[authenticated.role], { replace: true });
         }
         catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not sign in with these credentials.');
+            const msg = reason instanceof Error ? reason.message : 'Could not sign in with these credentials.';
+            if (role !== 'admin' && targetEmail.toLowerCase().includes('admin')) {
+                setError(`${msg} If you are logging in as Administrator, please select the "Admin" tab above.`);
+            } else {
+                setError(msg);
+            }
         }
         finally {
             setBusy(false);
@@ -50,7 +57,7 @@ export function LoginPage() {
         }
         await submitCredentials(email, password);
     }
-    return _jsxs(AuthFrame, { mode: "WELCOME BACK", children: [_jsx("h2", { children: "Sign in to your space" }), _jsx("p", { className: "auth-intro", children: "Pick up where you left off." }), error && _jsx(Notice, { kind: "error", onClose: () => setError(''), children: error }), _jsxs("form", { className: "auth-form", onSubmit: submit, children: [_jsxs("label", { children: ["Email address", _jsxs("span", { className: "input-shell", children: [_jsx(Mail, { size: 16 }), _jsx("input", { type: "email", value: email, onChange: event => setEmail(event.target.value), autoComplete: "email", placeholder: "you@example.com", required: true })] })] }), _jsxs("label", { children: ["Password", _jsxs("span", { className: "input-shell", children: [_jsx(KeyRound, { size: 16 }), _jsx("input", { type: visible ? 'text' : 'password', value: password, onChange: event => setPassword(event.target.value), autoComplete: "current-password", placeholder: "At least 8 characters", minLength: 8, required: true }), _jsx("button", { className: "password-toggle", type: "button", onClick: () => setVisible(value => !value), "aria-label": visible ? 'Hide password' : 'Show password', children: visible ? _jsx(EyeOff, { size: 16 }) : _jsx(Eye, { size: 16 }) })] })] }), _jsx("div", { className: "form-inline-link", children: _jsx(Link, { to: "/forgot-password", children: "Forgot password?" }) }), _jsxs(Button, { type: "submit", busy: busy, className: "button-full", children: ["Sign in ", _jsx(ArrowLeft, { size: 16, className: "button-arrow" })] })] }), _jsxs("p", { className: "auth-switch", children: ["New to SkillTrack? ", _jsx(Link, { to: "/register", children: "Create your account" })] })] });
+    return _jsxs(AuthFrame, { mode: isAdminLogin ? "ADMIN ACCESS" : "WELCOME BACK", children: [_jsx("h2", { children: isAdminLogin ? "Administrator sign in" : "Sign in to your space" }), _jsx("p", { className: "auth-intro", children: isAdminLogin ? "Use the administrator credentials configured in your environment." : "Choose your workspace, then use the credentials provided by your institution." }), _jsxs("div", { className: "role-switch", role: "tablist", "aria-label": "Choose account type", children: [_jsxs("button", { type: "button", role: "tab", "aria-selected": role === 'student', className: role === 'student' ? 'role-switch-active' : '', onClick: () => { setRole('student'); setError(''); }, children: [_jsx(GraduationCap, { size: 16 }), " Student"] }), _jsxs("button", { type: "button", role: "tab", "aria-selected": role === 'mentor', className: role === 'mentor' ? 'role-switch-active' : '', onClick: () => { setRole('mentor'); setError(''); }, children: [_jsx(UserRoundCheck, { size: 16 }), " Mentor"] }), _jsxs("button", { type: "button", role: "tab", "aria-selected": role === 'admin', className: role === 'admin' ? 'role-switch-active' : '', onClick: () => { setRole('admin'); setError(''); }, children: [_jsx(ShieldCheck, { size: 16 }), " Admin"] })] }), error && _jsx(Notice, { kind: "error", onClose: () => setError(''), children: error }), _jsxs("form", { className: "auth-form", onSubmit: submit, children: [_jsxs("label", { children: [isAdminLogin ? "Admin email" : "Institution email", _jsxs("span", { className: "input-shell", children: [_jsx(Mail, { size: 16 }), _jsx("input", { type: "email", value: email, onChange: event => setEmail(event.target.value), autoComplete: "email", placeholder: isAdminLogin ? "admin@skilltrack.io" : "you@college.edu", required: true })] })] }), _jsxs("label", { children: ["Password", _jsxs("span", { className: "input-shell", children: [_jsx(KeyRound, { size: 16 }), _jsx("input", { type: visible ? 'text' : 'password', value: password, onChange: event => setPassword(event.target.value), autoComplete: "current-password", placeholder: "Your password", minLength: 8, required: true }), _jsx("button", { className: "password-toggle", type: "button", onClick: () => setVisible(value => !value), "aria-label": visible ? 'Hide password' : 'Show password', children: visible ? _jsx(EyeOff, { size: 16 }) : _jsx(Eye, { size: 16 }) })] })] }), !isAdminLogin && _jsx("div", { className: "form-inline-link", children: _jsx(Link, { to: "/forgot-password", children: "Forgot password?" }) }), _jsxs(Button, { type: "submit", busy: busy, className: "button-full", children: ["Sign in ", _jsx(ArrowLeft, { size: 16, className: "button-arrow" })] })] })] });
 }
 export function RegisterPage() {
     const { user, register } = useAuth();

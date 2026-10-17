@@ -6,6 +6,7 @@ const { sendSuccess } = require('../utils/http');
 const { validateRequest } = require('../middleware/validateRequest');
 
 const idValidation = [param('id').isMongoId().withMessage('A valid exam ID is required.'), validateRequest];
+const studentIdValidation = [param('studentId').isMongoId().withMessage('A valid student ID is required.'), validateRequest];
 const listValidation = [
   query('page').optional().isInt({ min: 1, max: 100000 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
@@ -13,7 +14,7 @@ const listValidation = [
   query('status').optional().isIn(['PUBLISHED', 'ARCHIVED']),
   validateRequest,
 ];
-const examFields = ['title', 'description', 'durationMinutes', 'passingMarks', 'startAt', 'endAt', 'difficulty', 'selectionMode', 'questionIds', 'randomCriteria'];
+const examFields = ['title', 'description', 'durationMinutes', 'passingMarks', 'startAt', 'endAt', 'difficulty', 'selectionMode', 'questionIds', 'randomCriteria', 'security'];
 const createValidation = [
   body('title').isString().trim().isLength({ min: 2, max: 150 }),
   body('description').optional().isString().isLength({ max: 2000 }),
@@ -31,6 +32,12 @@ const createValidation = [
   body('randomCriteria.topic').optional().isString().trim().isLength({ max: 120 }),
   body('randomCriteria.skillId').optional().isMongoId(),
   body('randomCriteria.difficulty').optional().isIn(['EASY', 'MEDIUM', 'HARD']),
+  body('security').optional().isObject().custom(value => Object.keys(value).every(key => ['requireFullscreen', 'requireCamera', 'requireMicrophone', 'maxViolations', 'violationAction'].includes(key))),
+  body('security.requireFullscreen').optional().isBoolean().toBoolean(),
+  body('security.requireCamera').optional().isBoolean().toBoolean(),
+  body('security.requireMicrophone').optional().isBoolean().toBoolean(),
+  body('security.maxViolations').optional().isInt({ min: 1, max: 10 }).toInt(),
+  body('security.violationAction').optional().isIn(['AUTO_SUBMIT', 'REVIEW']),
   validateRequest,
 ];
 const assignmentValidation = [
@@ -66,5 +73,11 @@ const assign = asyncHandler(async (req, res) => sendSuccess(res, 200, 'Exam assi
 const archive = asyncHandler(async (req, res) => sendSuccess(res, 200, 'Exam archived.', {
   exam: await examService.archiveExam(req.user, req.params.id),
 }));
+const revokeAssignment = asyncHandler(async (req, res) => sendSuccess(res, 200, 'Exam assignment revoked.', {
+  assignment: await examService.revokeExamAssignment(req.user, req.params.id, req.params.studentId),
+}));
+const deleteExam = asyncHandler(async (req, res) => sendSuccess(res, 200, 'Exam deleted.', {
+  exam: await examService.deleteExam(req.user, req.params.id),
+}));
 
-module.exports = { archive, assign, assignmentValidation, create, createValidation, details, examFields, idValidation, list, listValidation, results, resultQueryValidation };
+module.exports = { archive, assign, assignmentValidation, create, createValidation, deleteExam, details, examFields, idValidation, list, listValidation, results, resultQueryValidation, revokeAssignment, studentIdValidation };

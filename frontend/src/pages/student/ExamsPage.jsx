@@ -51,14 +51,14 @@ export default function ExamsPage() {
           {sectionExams.length === 0
             ? <EmptyState title={`No ${section.title.toLowerCase()}`} detail={section.category === 'UPCOMING' ? 'New exam assignments will appear here.' : 'Your exam list will update as assignments change.'} />
             : <div className="achievement-grid">{sectionExams.map(item => <Card className="exam-card" key={item.assignmentId}>
-              <div className="task-heading-row"><span className={`status-pill ${item.category === 'ACTIVE' ? 'status-verified' : 'status-pending'}`}>{item.status === 'IN_PROGRESS' ? 'In progress' : section.title}</span><Clock3 size={16} /></div>
+              <div className="task-heading-row"><span className={`status-pill ${item.category === 'ACTIVE' ? 'status-verified' : item.category === 'COMPLETED' ? 'status-strong' : 'status-pending'}`}>{item.status === 'IN_PROGRESS' ? 'In progress' : item.category === 'COMPLETED' ? 'Completed' : section.title}</span><Clock3 size={16} /></div>
               <h3>{item.exam.title}</h3>
               {item.exam.description && <p className="muted">{item.exam.description}</p>}
               <div className="task-meta"><span>{item.exam.durationMinutes} minutes</span><span>{item.exam.totalMarks} marks · pass {item.exam.passingMarks}</span></div>
               <p className="muted"><CalendarClock size={14} /> {formatDate(item.exam.startAt)} – {formatDate(item.exam.endAt)}</p>
               {section.category === 'ACTIVE'
                 ? <Button busy={busyId === item.exam.id} onClick={() => startExam(item)}>{item.status === 'IN_PROGRESS' ? 'Continue exam' : 'Start exam'} <ArrowRight size={15} /></Button>
-                : <Button variant="secondary" disabled> {section.category === 'UPCOMING' ? 'Not open yet' : 'Submitted'} </Button>}
+                : <Button variant="secondary" disabled> {section.category === 'UPCOMING' ? 'Not open yet' : 'Completed'} </Button>}
             </Card>)}</div>}
         </section>;
       })}

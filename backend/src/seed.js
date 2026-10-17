@@ -25,8 +25,16 @@ async function seed() {
   const email = process.env.SEED_ADMIN_EMAIL;
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password || password.length < 12) throw new Error('Set SEED_ADMIN_EMAIL and a SEED_ADMIN_PASSWORD of at least 12 characters.');
+  const passwordHash = await bcrypt.hash(password, saltRounds);
   let admin = await User.findOne({ email: email.toLowerCase() });
-  if (!admin) admin = await User.create({ name: 'SkillTrack Admin', email, passwordHash: await bcrypt.hash(password, saltRounds), role: 'ADMIN' });
+  if (!admin) {
+    admin = await User.create({ name: 'SkillTrack Admin', email, passwordHash, role: 'ADMIN' });
+  } else {
+    admin.passwordHash = passwordHash;
+    admin.role = 'ADMIN';
+    admin.isActive = true;
+    await admin.save();
+  }
 
   for (const [name, category] of starterSkills) {
     await Skill.updateOne({ name }, { $setOnInsert: { name, category, description: `${name} learning and evidence tracking.` } }, { upsert: true });

@@ -50,7 +50,7 @@ export default function ResultsPage() {
           ? <EmptyState title="No evaluated results yet" detail="Submitted exams will appear here after evaluation." />
           : <>
             <div className="table-card"><div className="table-scroll"><table><thead><tr>
-              {!studentView && <th>Student</th>}<th>Exam</th><th>Submitted</th><th>Score</th><th>Outcome</th><th>Answers</th>{!studentView && <th>Activity</th>}<th>Performance</th>
+              {!studentView && <th>Student</th>}<th>Exam</th><th>Submitted</th><th>Score</th><th>Outcome</th><th>Answers</th>{!studentView && <th>Responses</th>}{!studentView && <th>Activity</th>}<th>Performance</th>
             </tr></thead><tbody>{results.map(item => <tr key={item.attemptId}>
               {!studentView && <td><strong>{item.student?.name || 'Student'}</strong><br /><span className="muted">{item.student?.email || ''}</span></td>}
               <td><strong>{item.exam.title}</strong><br /><span className="muted">{dateLabel(item.exam.startAt)}</span></td>
@@ -58,6 +58,7 @@ export default function ResultsPage() {
               <td><strong>{item.result.score}/{item.exam.totalMarks}</strong><br /><span className="muted">{item.result.percentage}%</span></td>
               <td><span className={`status-pill ${item.result.passed ? 'status-verified' : 'status-rejected'}`}>{item.result.passed ? 'Passed' : 'Not passed'}</span></td>
               <td><span className="result-answer-counts"><span><CheckCircle2 size={13} /> {item.result.correctCount}</span><span><XCircle size={13} /> {item.result.incorrectCount}</span><span>{item.result.unansweredCount} unanswered</span></span></td>
+              {!studentView && <td><details className="result-breakdown"><summary>View {item.answers.length} questions</summary>{item.answers.map((answer, index) => <div className="response-line" key={answer.questionId}><strong>{index + 1}. {answer.question}</strong><span>{answer.answer || 'Not answered'}</span></div>)}</details></td>}
               {!studentView && <td><details className="result-breakdown"><summary>{item.suspiciousActivityCount} events</summary>
                 {item.activityEvents?.length ? item.activityEvents.map((event, index) => <p className="muted" key={`${event.type}-${event.occurredAt}-${index}`}>{event.type === 'TAB_HIDDEN' ? 'Tab or window hidden' : 'Fullscreen exited'} · {dateLabel(event.occurredAt)}</p>) : <p className="muted">No recorded activity events.</p>}
               </details></td>}

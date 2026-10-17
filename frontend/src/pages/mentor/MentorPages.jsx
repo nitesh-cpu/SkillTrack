@@ -20,6 +20,7 @@ import { Card } from '../../components/Card';
 import { Loading } from '../../components/Loading';
 import { EmptyState, Notice, PageHeader, QueryState, StatCard } from '../../components/Workspace';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
 import { mentorService } from '../../services/mentorService';
 import { formatDate, initials } from '../../utils/formatters';
 import { requiredText } from '../../utils/validators';
@@ -60,6 +61,7 @@ function PendingTaskCard({ task }) {
 }
 
 export function MentorDashboardPage() {
+  const { user } = useAuth();
   const query = useMentorData();
   const data = query.data;
   const pendingTasks = data?.tasks.filter(task => task.status === 'Pending') ?? [];
@@ -92,7 +94,7 @@ export function MentorDashboardPage() {
       <PageHeader
         eyebrow="MENTOR HUB"
         title="Support progress with timely guidance."
-        description="Review student work, check learning progress, and keep assignments moving."
+        description={user?.batch ? `Batch: ${user.batch} · Review student work, check learning progress, and keep assignments moving.` : "Review student work, check learning progress, and keep assignments moving."}
         action={<Link className="button button-primary" to="/mentor/tasks?assign=true"><Plus size={16} /> Assign Task</Link>}
       />
       <QueryState loading={query.loading} error={query.error} onRetry={query.reload} />
@@ -165,7 +167,7 @@ export function MentorStudentsPage() {
   const students = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     return (query.data?.students ?? [])
-      .filter(student => !normalized || `${student.name} ${student.email}`.toLowerCase().includes(normalized))
+      .filter(student => !normalized || `${student.name} ${student.email} ${student.batch || ''}`.toLowerCase().includes(normalized))
       .slice()
       .sort((left, right) => sort === 'progress'
         ? (right.progress ?? -1) - (left.progress ?? -1) || left.name.localeCompare(right.name)
@@ -176,7 +178,7 @@ export function MentorStudentsPage() {
     <>
       <PageHeader eyebrow="YOUR COHORT" title="Assigned students" description="Only students assigned to your mentor account are shown here." />
       <div className="list-toolbar">
-        <label className="search-field"><Search size={16} /><input aria-label="Search assigned students" placeholder="Search students by name or email" value={search} onChange={event => setSearch(event.target.value)} /></label>
+        <label className="search-field"><Search size={16} /><input aria-label="Search assigned students" placeholder="Search students by name, email, or batch" value={search} onChange={event => setSearch(event.target.value)} /></label>
         <label className="mentor-sort-control"><ArrowDownUp size={14} aria-hidden="true" /><span className="visually-hidden">Sort students</span><select aria-label="Sort students" value={sort} onChange={event => setSort(event.target.value)}><option value="name">Name</option><option value="progress">Progress</option></select></label>
         <span className="muted">{students.length} student{students.length === 1 ? '' : 's'}</span>
       </div>
@@ -187,7 +189,11 @@ export function MentorStudentsPage() {
             <Card className="student-card" key={student.id}>
               <div className="student-card-head">
                 <span className="avatar avatar-large">{initials(student.name)}</span>
-                <div className="grow"><h3>{student.name}</h3><span className="muted">{student.email}</span></div>
+                <div className="grow">
+                  <h3>{student.name}</h3>
+                  <span className="muted">{student.email}</span>
+                  {student.batch && <small className="muted" style={{ display: 'block', marginTop: '2px' }}>Batch: {student.batch}</small>}
+                </div>
                 <span className={`status-pill ${student.status === 'Active' ? 'status-verified' : 'status-rejected'}`}>{student.status}</span>
               </div>
               <div className="student-progress-line"><span>{student.trackedSkills ? `Average across ${student.trackedSkills} recorded skills` : 'Recorded skill progress'}</span><strong>{student.progress === null ? 'Not available' : `${student.progress}%`}</strong></div>
@@ -213,7 +219,7 @@ export function StudentDetailPage() {
       <PageHeader
         eyebrow="ASSIGNED STUDENT"
         title={data?.student.name ?? 'Student profile'}
-        description={data?.student.email}
+        description={`${data?.student.email || ''}${data?.student.batch ? ` · Batch: ${data.student.batch}` : ''}`}
         action={data && <Link className="button button-primary" to={`/mentor/tasks?student=${data.student.id}&assign=true`}><Plus size={15} /> Assign Task</Link>}
       />
       <QueryState loading={query.loading} error={query.error} onRetry={query.reload} />

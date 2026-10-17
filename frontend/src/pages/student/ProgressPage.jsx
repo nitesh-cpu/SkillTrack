@@ -22,7 +22,7 @@ export default function ProgressPage() {
       <PageHeader
         eyebrow="YOUR MOMENTUM"
         title="Progress that adds up."
-        description="A snapshot of the work you've shared and the skills you're building."
+        description={user?.batch || data?.user?.batch ? `Batch: ${user?.batch || data?.user?.batch} · A snapshot of the work you've shared and the skills you're building.` : "A snapshot of the work you've shared and the skills you're building."}
       />
       <QueryState loading={query.loading} error={query.error} onRetry={query.reload} />
       {data && (

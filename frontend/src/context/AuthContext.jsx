@@ -101,11 +101,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(credentials => authenticate(authService.login(credentials)), [authenticate]);
-  const register = useCallback(credentials => authenticate(authService.register(credentials)), [authenticate]);
   const logout = useCallback(() => clearSession(), [clearSession]);
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout }),
-    [user, isLoading, login, register, logout],
+    () => ({ user, isLoading, login, logout }),
+    [user, isLoading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

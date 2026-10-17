@@ -20,10 +20,10 @@ async function getStudents(mentorId, { page, limit = 25, search } = {}) {
   const filter = { _id: { $in: studentIds }, role: 'STUDENT' };
   if (search) {
     const expression = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ name: expression }, { email: expression }];
+    filter.$or = [{ name: expression }, { email: expression }, { batch: expression }];
   }
   const total = page !== undefined ? await User.countDocuments(filter) : undefined;
-  let studentsQuery = User.find(filter).select('name email createdAt isActive').sort({ name: 1 });
+  let studentsQuery = User.find(filter).select('name email batch createdAt isActive').sort({ name: 1 });
   if (page !== undefined) studentsQuery = studentsQuery.skip((page - 1) * limit).limit(limit);
   const students = await studentsQuery.lean();
   const visibleStudentIds = students.map(student => student._id);
@@ -39,6 +39,7 @@ async function getStudents(mentorId, { page, limit = 25, search } = {}) {
   }]));
   const listedStudents = students.map(student => ({
     ...student,
+    batch: student.batch || '',
     progress: progressByStudent.get(String(student._id))?.progress ?? null,
     trackedSkills: progressByStudent.get(String(student._id))?.trackedSkills ?? 0,
   }));
@@ -97,7 +98,7 @@ async function listMentorTasks(mentorId, { page, limit = 25, search, status } = 
 async function getStudentDetail(mentorId, studentId) {
   const assignment = await MentorStudent.exists({ mentorId, studentId });
   if (!assignment) throw new AppError('Student is not assigned to this mentor.', 403);
-  const student = await User.findOne({ _id: studentId, role: 'STUDENT' }).select('name email isActive createdAt').lean();
+  const student = await User.findOne({ _id: studentId, role: 'STUDENT' }).select('name email batch isActive createdAt').lean();
   if (!student) throw new AppError('Student not found.', 404);
   const [achievements, tasks, latestScores, scoreHistory, prerequisites, rule] = await Promise.all([
     Achievement.find({ userId: studentId }).sort({ submittedAt: -1 }).limit(20).populate('reviewedBy', 'name').lean(),

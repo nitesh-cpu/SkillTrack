@@ -727,17 +727,17 @@ describe('API envelope and access control', () => {
 });
 
 describe('authentication contract', () => {
-  test('public registration rejects caller-supplied role fields', async () => {
+  test('public registration is unavailable', async () => {
     const response = await request(app).post('/api/auth/register').send({
       name: 'New Student', email: 'new@example.com', password: 'long-password', role: 'ADMIN',
     });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     expect(authService.registerStudent).not.toHaveBeenCalled();
   });
 
-  test('registration rejects invalid email and weak password', async () => {
+  test('registration cannot be used with invalid credentials either', async () => {
     const response = await request(app).post('/api/auth/register').send({ name: 'X', email: 'bad', password: 'weak' });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     expect(response.body).toMatchObject({ success: false });
     expect(authService.registerStudent).not.toHaveBeenCalled();
   });

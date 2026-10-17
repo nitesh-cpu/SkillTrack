@@ -16,6 +16,7 @@ const mentorValidation = [
   body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters.'),
   body('email').trim().isEmail().withMessage('A valid email address is required.').normalizeEmail(),
   body('password').isString().isLength({ min: 8, max: 128 }).withMessage('Initial password must be between 8 and 128 characters.'),
+  body('batch').optional({ values: 'null' }).isString().trim().isLength({ max: 100 }).withMessage('Batch name cannot exceed 100 characters.'),
   validateRequest,
 ];
 const createUserValidation = [
@@ -23,6 +24,7 @@ const createUserValidation = [
   body('email').trim().isEmail().withMessage('A valid email address is required.').normalizeEmail(),
   body('password').isString().isLength({ min: 8, max: 128 }).withMessage('Initial password must be between 8 and 128 characters.'),
   body('role').isIn(['ADMIN', 'STUDENT', 'MENTOR']).withMessage('A valid account role is required.'),
+  body('batch').optional({ values: 'null' }).isString().trim().isLength({ max: 100 }).withMessage('Batch name cannot exceed 100 characters.'),
   validateRequest,
 ];
 const updateUserValidation = [
@@ -30,6 +32,7 @@ const updateUserValidation = [
   body('email').optional().trim().isEmail().normalizeEmail(),
   body('isActive').optional().isBoolean().toBoolean(),
   body('role').optional().isIn(['ADMIN', 'STUDENT', 'MENTOR']).withMessage('A valid account role is required.'),
+  body('batch').optional({ values: 'null' }).isString().trim().isLength({ max: 100 }).withMessage('Batch name cannot exceed 100 characters.'),
   body('passwordHash').not().exists().withMessage('Password hashes cannot be changed here.'),
   validateRequest,
 ];

@@ -43,14 +43,14 @@ const resultSchema = new mongoose.Schema({
 }, { _id: false });
 
 const activityEventSchema = new mongoose.Schema({
-  type: { type: String, enum: ['TAB_HIDDEN', 'FULLSCREEN_EXITED'], required: true },
+  type: { type: String, enum: ['TAB_HIDDEN', 'FULLSCREEN_EXITED', 'CAMERA_DENIED', 'MICROPHONE_DENIED'], required: true },
   occurredAt: { type: Date, required: true },
 }, { _id: false });
 
 const attemptSchema = new mongoose.Schema({
   examId: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: true, index: true },
   assignmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExamAssignment', required: true, index: true },
-  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: { type: [attemptQuestionSchema], required: true },
   answers: { type: [attemptAnswerSchema], default: [] },
   startedAt: { type: Date, required: true },

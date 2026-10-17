@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Exam = require('../models/Exam');
 const ExamAssignment = require('../models/ExamAssignment');
+const ExamAttempt = require('../models/ExamAttempt');
 const MentorStudent = require('../models/MentorStudent');
 const Question = require('../models/Question');
 const Skill = require('../models/Skill');
@@ -10,6 +11,13 @@ const { AppError } = require('../utils/errors');
 
 const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'];
 const MAX_QUESTIONS = 100;
+const DEFAULT_SECURITY = {
+  requireFullscreen: true,
+  requireCamera: true,
+  requireMicrophone: true,
+  maxViolations: 1,
+  violationAction: 'AUTO_SUBMIT',
+};
 
 function requireRole(actor, roles = ['ADMIN', 'MENTOR']) {
   if (!actor || !roles.includes(actor.role)) throw new AppError('You do not have permission to manage exams.', 403);
@@ -41,6 +49,7 @@ function normalizeCommon(input) {
     startAt,
     endAt,
     passingMarks: Number(input.passingMarks),
+    security: { ...DEFAULT_SECURITY, ...(input.security || DEFAULT_SECURITY) },
   };
 }
 
@@ -242,4 +251,30 @@ async function archiveExam(actor, examId) {
   return exam;
 }
 
-module.exports = { archiveExam, assignExam, createExam, getExam, listExams };
+async function revokeExamAssignment(actor, examId, studentId) {
+  requireRole(actor);
+  const examFilter = actor.role === 'ADMIN' ? { _id: examId } : { _id: examId, createdBy: actor._id };
+  const exam = await Exam.findOne(examFilter).select('_id');
+  if (!exam) throw new AppError('Exam not found in this workspace.', 404);
+  const assignment = await ExamAssignment.findOneAndUpdate(
+    { examId, studentId, status: 'ASSIGNED' },
+    { $set: { status: 'REVOKED' } },
+    { new: true },
+  );
+  if (!assignment) throw new AppError('Only an assigned exam can be revoked.', 409);
+  await writeAudit({ actorId: actor._id, action: 'EXAM_ASSIGNMENT_REVOKED', entity: 'ExamAssignment', entityId: assignment._id, metadata: { examId, studentId } });
+  return assignment;
+}
+
+async function deleteExam(actor, examId) {
+  if (!actor || actor.role !== 'ADMIN') throw new AppError('Only administrators can delete exams.', 403);
+  const exam = await Exam.findById(examId).select('_id title');
+  if (!exam) throw new AppError('Exam not found.', 404);
+  if (await ExamAttempt.exists({ examId })) throw new AppError('An exam with attempts cannot be deleted. Archive it instead.', 409);
+  await ExamAssignment.deleteMany({ examId });
+  await Exam.deleteOne({ _id: examId });
+  await writeAudit({ actorId: actor._id, action: 'EXAM_DELETED', entity: 'Exam', entityId: examId, metadata: { title: exam.title } });
+  return { id: String(examId) };
+}
+
+module.exports = { archiveExam, assignExam, createExam, deleteExam, getExam, listExams, revokeExamAssignment };

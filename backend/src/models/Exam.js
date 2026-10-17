@@ -13,6 +13,14 @@ const examQuestionSchema = new mongoose.Schema({
   marks: { type: Number, required: true, min: 0.25, max: 100 },
 }, { _id: false });
 
+const examSecuritySchema = new mongoose.Schema({
+  requireFullscreen: { type: Boolean, default: true },
+  requireCamera: { type: Boolean, default: true },
+  requireMicrophone: { type: Boolean, default: true },
+  maxViolations: { type: Number, min: 1, max: 10, default: 1 },
+  violationAction: { type: String, enum: ['AUTO_SUBMIT', 'REVIEW'], default: 'AUTO_SUBMIT' },
+}, { _id: false });
+
 const examSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, minlength: 2, maxlength: 150 },
   description: { type: String, trim: true, maxlength: 2000, default: '' },
@@ -26,6 +34,7 @@ const examSchema = new mongoose.Schema({
   questions: { type: [examQuestionSchema], required: true, validate: value => value.length > 0 },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   selectionMode: { type: String, enum: ['MANUAL', 'RANDOM'], required: true },
+  security: { type: examSecuritySchema, default: () => ({}) },
 }, { timestamps: true });
 
 examSchema.index({ createdBy: 1, createdAt: -1 });

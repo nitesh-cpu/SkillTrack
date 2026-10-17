@@ -64,7 +64,7 @@ const saveExamAnswer = asyncHandler(async (req, res) => sendSuccess(res, 200, 'A
   attempt: await examAttemptService.saveAnswer(req.user._id, req.params.attemptId, req.body),
 }));
 const examActivityValidation = [
-  body('type').isIn(['TAB_HIDDEN', 'FULLSCREEN_EXITED']).withMessage('Choose a supported exam activity.'),
+  body('type').isIn(['TAB_HIDDEN', 'FULLSCREEN_EXITED', 'CAMERA_DENIED', 'MICROPHONE_DENIED']).withMessage('Choose a supported exam activity.'),
   validateRequest,
 ];
 const recordExamActivity = asyncHandler(async (req, res) => sendSuccess(res, 200, 'Exam activity recorded.', {

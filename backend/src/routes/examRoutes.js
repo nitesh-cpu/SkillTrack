@@ -11,6 +11,8 @@ router.post('/', rejectUnknownQueryFields([]), rejectUnknownBodyFields(controlle
 router.get('/results', rejectUnknownQueryFields(['page', 'limit']), controller.resultQueryValidation, controller.results);
 router.get('/:id', rejectUnknownQueryFields([]), controller.idValidation, controller.details);
 router.post('/:id/assignments', rejectUnknownQueryFields([]), rejectUnknownBodyFields(['studentIds']), controller.idValidation, controller.assignmentValidation, controller.assign);
+router.delete('/:id/assignments/:studentId', requireRole('ADMIN', 'MENTOR'), rejectUnknownQueryFields([]), controller.idValidation, controller.studentIdValidation, controller.revokeAssignment);
+router.delete('/:id', requireRole('ADMIN'), rejectUnknownQueryFields([]), controller.idValidation, controller.deleteExam);
 router.patch('/:id/archive', rejectUnknownQueryFields([]), rejectUnknownBodyFields([]), controller.idValidation, controller.archive);
 
 module.exports = router;

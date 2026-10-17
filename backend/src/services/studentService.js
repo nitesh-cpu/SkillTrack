@@ -24,7 +24,7 @@ async function getDashboard(user) {
     tasks: tasks.filter(item => item.status === 'PENDING').length,
   };
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, batch: user.batch || '' },
     stats,
     achievements,
     skills: scores,

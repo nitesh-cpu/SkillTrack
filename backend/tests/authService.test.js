@@ -45,6 +45,24 @@ beforeEach(() => {
 });
 
 describe('authentication service', () => {
+  test('login only authenticates a user from the selected role', async () => {
+    const user = {
+      _id: '507f1f77bcf86cd799439011',
+      name: 'Student',
+      email: 'student@example.com',
+      role: 'STUDENT',
+      isActive: true,
+      authVersion: 0,
+      passwordHash: await bcrypt.hash('strong-password', 4),
+    };
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+
+    const result = await authService.login({ email: user.email, password: 'strong-password', role: 'STUDENT' }, config);
+
+    expect(User.findOne).toHaveBeenCalledWith({ email: user.email, role: 'STUDENT' });
+    expect(result.user.role).toBe('STUDENT');
+  });
+
   test('registration hashes passwords and returns the existing public auth contract', async () => {
     User.exists.mockResolvedValue(null);
     User.create.mockImplementation(async input => ({

@@ -109,7 +109,7 @@ export function StudentDashboardPage() {
       <PageHeader
         eyebrow="YOUR LEARNING, IN FOCUS"
         title={`Welcome back, ${user?.name?.split(' ')[0] ?? 'learner'}.`}
-        description="A clear view of your skills, submitted work, and next steps."
+        description={user?.batch || data?.user?.batch ? `Batch: ${user?.batch || data?.user?.batch} · A clear view of your skills, submitted work, and next steps.` : "A clear view of your skills, submitted work, and next steps."}
         action={<Link className="button button-primary" to="/student/achievements/new"><Award size={16} /> Add achievement</Link>}
       />
       <QueryState loading={query.loading} error={query.error} onRetry={query.reload} />

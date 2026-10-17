@@ -473,7 +473,7 @@ describe('student exam attempt service', () => {
     expect(recalculateForUser).toHaveBeenCalledWith(studentId, { reason: 'exam_result_evaluated' });
   });
 
-  test('records tab changes without failing an attempt and throttles duplicate events', async () => {
+  test('records tab changes, auto-submits at the security threshold, and throttles duplicate events', async () => {
     const recordedAt = new Date();
     const inProgress = { ...activeAttempt, expiresAt: new Date(Date.now() + 60_000) };
     ExamAttempt.findOne.mockResolvedValueOnce(inProgress).mockResolvedValueOnce(inProgress).mockResolvedValueOnce({
@@ -487,7 +487,7 @@ describe('student exam attempt service', () => {
       suspiciousActivityCount: 1,
     }).mockResolvedValueOnce(null);
     const result = await attemptService.recordActivity(studentId, attemptId, 'TAB_HIDDEN');
-    expect(result).toEqual({ suspiciousActivityCount: 1, recorded: true });
+    expect(result).toEqual({ suspiciousActivityCount: 1, recorded: true, autoSubmitted: true });
     expect(ExamAttempt.findOneAndUpdate).toHaveBeenCalledWith(expect.objectContaining({
       _id: attemptId,
       studentId,
@@ -501,7 +501,7 @@ describe('student exam attempt service', () => {
 
     const duplicate = await attemptService.recordActivity(studentId, attemptId, 'TAB_HIDDEN');
     expect(duplicate).toEqual({ suspiciousActivityCount: 1, recorded: false });
-    expect(ExamAttempt.findOneAndUpdate).toHaveBeenCalledTimes(2);
+    expect(ExamAttempt.findOneAndUpdate).toHaveBeenCalledTimes(3);
     expect(writeAudit).toHaveBeenCalledTimes(1);
   });
 

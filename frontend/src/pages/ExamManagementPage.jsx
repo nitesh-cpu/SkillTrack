@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, CalendarClock, ClipboardList, Plus, Search, Users } from 'lucide-react';
+import { Archive, CalendarClock, ClipboardList, Plus, Search, Trash2, Users } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
@@ -21,6 +21,13 @@ const EMPTY_EXAM = {
   skillId: '',
   difficulty: '',
   count: '10',
+  security: {
+    requireFullscreen: true,
+    requireCamera: true,
+    requireMicrophone: true,
+    maxViolations: '1',
+    violationAction: 'AUTO_SUBMIT',
+  },
 };
 
 function dateLabel(value) {
@@ -93,6 +100,10 @@ export default function ExamManagementPage() {
       startAt: startDate.toISOString(),
       endAt: endDate.toISOString(),
       selectionMode: form.selectionMode,
+      security: {
+        ...form.security,
+        maxViolations: Number(form.security.maxViolations),
+      },
       ...(form.selectionMode === 'MANUAL'
         ? { questionIds: form.questionIds }
         : { randomCriteria: {
@@ -137,16 +148,22 @@ export default function ExamManagementPage() {
 
   async function saveAssignments(event) {
     event.preventDefault();
-    if (!assigningExam || !selectedStudents.length) {
-      setError('Select at least one student.');
+    if (!assigningExam) {
+      setError('Choose an exam first.');
       return;
     }
     setBusy(true);
     setError('');
     try {
-      const result = await api.assignExam(assigningExam.id, selectedStudents);
+      const revokedStudents = assigningExam.assignedStudents
+        .map(student => student.id)
+        .filter(studentId => !selectedStudents.includes(studentId));
+      await Promise.all(revokedStudents.map(studentId => api.revokeExamAssignment(assigningExam.id, studentId)));
+      const result = selectedStudents.length
+        ? await api.assignExam(assigningExam.id, selectedStudents)
+        : { newlyAssigned: 0 };
       setAssigningExam(null);
-      setNotice(`${result.newlyAssigned} student${result.newlyAssigned === 1 ? '' : 's'} assigned.`);
+      setNotice(`${result.newlyAssigned} student${result.newlyAssigned === 1 ? '' : 's'} assigned. ${revokedStudents.length} access${revokedStudents.length === 1 ? '' : 'es'} revoked.`);
       examsQuery.reload();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not assign this exam.');
@@ -165,6 +182,21 @@ export default function ExamManagementPage() {
       examsQuery.reload();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not archive this exam.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function deleteExam(exam) {
+    setBusyId(exam.id);
+    setError('');
+    setNotice('');
+    try {
+      await api.deleteExam(exam.id);
+      setNotice('Exam deleted.');
+      examsQuery.reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete this exam.');
     } finally {
       setBusyId('');
     }
@@ -211,6 +243,7 @@ export default function ExamManagementPage() {
               <td><div className="toolbar-filters">
                 {exam.status === 'PUBLISHED' && <Button variant="secondary" onClick={() => openAssignment(exam)}><Users size={14} /> Assign students</Button>}
                 {exam.status === 'PUBLISHED' && <Button variant="secondary" busy={busyId === exam.id} onClick={() => window.confirm(`Archive "${exam.title}"? Students will no longer be able to start it.`) && archiveExam(exam)}><Archive size={14} /> Archive</Button>}
+                {isAdmin && <Button variant="danger" busy={busyId === exam.id} onClick={() => window.confirm(`Delete "${exam.title}" permanently? Exams with attempts must be archived.`) && deleteExam(exam)}><Trash2 size={14} /> Delete</Button>}
               </div></td>
             </tr>)}</tbody></table></div>
             <div className="list-toolbar"><Button variant="secondary" disabled={!pagination || pagination.page <= 1} onClick={() => setPage(value => value - 1)}>Previous</Button>
@@ -228,6 +261,13 @@ export default function ExamManagementPage() {
           <label className="field-label">Starts<input required type="datetime-local" value={form.startAt} onChange={event => setForm({ ...form, startAt: event.target.value })} /></label>
           <label className="field-label">Ends<input required type="datetime-local" value={form.endAt} onChange={event => setForm({ ...form, endAt: event.target.value })} /></label>
         </div>
+        <fieldset className="exam-security-settings"><legend>Secure exam controls</legend>
+          <label><input type="checkbox" checked={form.security.requireFullscreen} onChange={event => setForm({ ...form, security: { ...form.security, requireFullscreen: event.target.checked } })} /> Require fullscreen</label>
+          <label><input type="checkbox" checked={form.security.requireCamera} onChange={event => setForm({ ...form, security: { ...form.security, requireCamera: event.target.checked } })} /> Require camera</label>
+          <label><input type="checkbox" checked={form.security.requireMicrophone} onChange={event => setForm({ ...form, security: { ...form.security, requireMicrophone: event.target.checked } })} /> Require microphone</label>
+          <label className="field-label">Maximum violations<input type="number" min="1" max="10" value={form.security.maxViolations} onChange={event => setForm({ ...form, security: { ...form.security, maxViolations: event.target.value } })} /></label>
+          <label className="field-label">Violation action<select value={form.security.violationAction} onChange={event => setForm({ ...form, security: { ...form.security, violationAction: event.target.value } })}><option value="AUTO_SUBMIT">Auto-submit attempt</option><option value="REVIEW">Flag for review</option></select></label>
+        </fieldset>
         <label className="field-label">Question selection<select value={form.selectionMode} onChange={event => setForm({ ...form, selectionMode: event.target.value, questionIds: [] })}><option value="MANUAL">Choose approved questions</option><option value="RANDOM">Random from approved bank</option></select></label>
         {form.selectionMode === 'MANUAL'
           ? <div className="stacked-form"><label className="field-label">Find approved questions<input value={questionSearch} onChange={event => setQuestionSearch(event.target.value)} placeholder="Search text or topic" /></label>
@@ -248,8 +288,8 @@ export default function ExamManagementPage() {
           </div>}
         {error && <Notice kind="error">{error}</Notice>}
       </Modal>}
-      {assigningExam && <Modal title={`Assign "${assigningExam.title}"`} onClose={() => setAssigningExam(null)} onSubmit={saveAssignments} submitLabel="Save assignments" busy={busy}>
-        <p className="muted">Select only students in your authorized workspace. Existing assignments are already selected.</p>
+      {assigningExam && <Modal className="assignment-modal" title={`Assign "${assigningExam.title}"`} onClose={() => setAssigningExam(null)} onSubmit={saveAssignments} submitLabel="Save assignments" busy={busy}>
+        <p className="muted">Select students who may take this exam. Removing a selected student revokes their access before they start.</p>
         <QueryState loading={studentsQuery.loading} error={studentsQuery.error} onRetry={studentsQuery.reload} />
         {students.length === 0 && studentsQuery.data && <EmptyState title="No students available" detail={isAdmin ? 'There are no active students to assign.' : 'No students are currently assigned to your mentor account.'} />}
         <div className="stacked-form">{students.map(student => <label className="question-choice" key={student.id}>

@@ -5,7 +5,6 @@ const controller = require('../controllers/authController');
 const { rejectUnknownBodyFields, rejectUnknownQueryFields } = require('../middleware/validateRequest');
 
 const router = express.Router();
-const registrationLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10 });
 const loginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10 });
 const resetLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 5 });
 
@@ -14,8 +13,7 @@ router.use((req, res, next) => {
   res.set('Pragma', 'no-cache');
   next();
 });
-router.post('/register', registrationLimiter, rejectUnknownQueryFields([]), rejectUnknownBodyFields(['name', 'email', 'password']), controller.registerValidation, controller.register);
-router.post('/login', loginLimiter, rejectUnknownQueryFields([]), rejectUnknownBodyFields(['email', 'password']), controller.loginValidation, controller.login);
+router.post('/login', loginLimiter, rejectUnknownQueryFields([]), rejectUnknownBodyFields(['email', 'password', 'role']), controller.loginValidation, controller.login);
 router.get('/me', rejectUnknownQueryFields([]), authenticate, controller.me);
 router.post('/forgot-password', resetLimiter, rejectUnknownQueryFields([]), rejectUnknownBodyFields(['email']), controller.forgotValidation, controller.forgotPassword);
 router.post('/reset-password', resetLimiter, rejectUnknownQueryFields([]), rejectUnknownBodyFields(['token', 'password']), controller.resetValidation, controller.resetPassword);

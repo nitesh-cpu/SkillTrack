@@ -95,6 +95,7 @@ function mapUser(raw) {
         email: String(raw.email || ''),
         role: roleFromApi(String(raw.role || 'STUDENT')),
         status: raw.isActive === false ? 'Disabled' : 'Active',
+        batch: String(raw.batch || ''),
     };
 }
 function mapAchievement(raw) {
@@ -247,11 +248,12 @@ function mapStudent(raw) {
         mentorId: idOf(mentor),
         progress: raw.progress === null || raw.progress === undefined ? null : Number(raw.progress),
         trackedSkills: Number(raw.trackedSkills || 0),
+        batch: String(raw.batch || user.batch || ''),
     };
 }
 function mapMentor(raw) {
     const user = mapUser(raw);
-    return { ...user, role: 'mentor', studentCount: Number(raw.studentCount || 0) };
+    return { ...user, role: 'mentor', studentCount: Number(raw.studentCount || 0), batch: String(raw.batch || user.batch || '') };
 }
 function broadcastChange() {
     try {
@@ -269,8 +271,8 @@ async function getSkillByName(name) {
     return mapSkill(skill);
 }
 export const api = {
-    async login(email, password) {
-        const data = await request('/auth/login', send('POST', { email, password }));
+    async login(email, password, role) {
+        const data = await request('/auth/login', send('POST', { email, password, role: role.toUpperCase() }));
         return { user: mapUser(data.user), token: data.token };
     },
     async register(name, email, password) {
@@ -378,6 +380,12 @@ export const api = {
                 } : { title: 'Exam', startAt: '', totalMarks: 0, passingMarks: 0 },
                 submittedAt: String(item.submittedAt || ''),
                 result: item.result || {},
+                answers: Array.isArray(item.answers) ? item.answers.map(answer => ({
+                    questionId: String(answer.questionId || ''),
+                    question: String(answer.question || ''),
+                    questionType: String(answer.questionType || ''),
+                    answer: String(answer.answer || ''),
+                })) : [],
                 suspiciousActivityCount: Number(item.suspiciousActivityCount || 0),
                 activityEvents: Array.isArray(item.activityEvents) ? item.activityEvents.map(event => ({
                     type: String(event.type || ''),
@@ -695,6 +703,13 @@ export const api = {
                 difficulty: String(raw.difficulty || ''),
                 status: String(raw.status || 'PUBLISHED'),
                 selectionMode: String(raw.selectionMode || ''),
+                security: {
+                    requireFullscreen: raw.security?.requireFullscreen !== false,
+                    requireCamera: raw.security?.requireCamera !== false,
+                    requireMicrophone: raw.security?.requireMicrophone !== false,
+                    maxViolations: Number(raw.security?.maxViolations || 1),
+                    violationAction: String(raw.security?.violationAction || 'AUTO_SUBMIT'),
+                },
                 questionCount: Array.isArray(raw.questions) ? raw.questions.length : 0,
                 createdBy: raw.createdBy && typeof raw.createdBy === 'object' ? String(raw.createdBy.name || '') : '',
                 assignedStudents: Array.isArray(raw.assignedStudents) ? raw.assignedStudents.map(student => ({
@@ -716,8 +731,16 @@ export const api = {
         broadcastChange();
         return data;
     },
+    async revokeExamAssignment(examId, studentId) {
+        await request(`/exams/${encodeURIComponent(examId)}/assignments/${encodeURIComponent(studentId)}`, send('DELETE'));
+        broadcastChange();
+    },
     async archiveExam(examId) {
         await request(`/exams/${encodeURIComponent(examId)}/archive`, send('PATCH'));
+        broadcastChange();
+    },
+    async deleteExam(examId) {
+        await request(`/exams/${encodeURIComponent(examId)}`, send('DELETE'));
         broadcastChange();
     },
     async getAdminUsers({ page = 1, limit = 25, search = '', role = '', isActive = '' } = {}) {

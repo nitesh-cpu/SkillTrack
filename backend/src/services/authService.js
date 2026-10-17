@@ -11,7 +11,14 @@ const SALT_ROUNDS = 12;
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('skilltrack-invalid-login-password', SALT_ROUNDS);
 
 function publicUser(user) {
-  return { id: String(user._id), name: user.name, email: user.email, role: user.role, isActive: user.isActive };
+  return {
+    id: String(user._id),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isActive: user.isActive,
+    ...(user.batch !== undefined ? { batch: user.batch } : {}),
+  };
 }
 
 function signToken(user, config) {
@@ -29,16 +36,22 @@ function signToken(user, config) {
   );
 }
 
-async function registerStudent({ name, email, password }, config) {
+async function registerStudent({ name, email, password, batch }, config) {
   const existing = await User.exists({ email: email.toLowerCase() });
   if (existing) throw new AppError('An account with this email already exists.', 409);
-  const user = await User.create({ name, email, passwordHash: await bcrypt.hash(password, SALT_ROUNDS), role: 'STUDENT' });
-  await writeAudit({ actorId: user._id, action: 'USER_CREATED', entity: 'User', entityId: user._id, metadata: { role: 'STUDENT' } });
+  const user = await User.create({
+    name,
+    email,
+    passwordHash: await bcrypt.hash(password, SALT_ROUNDS),
+    role: 'STUDENT',
+    ...(batch ? { batch: batch.trim() } : {}),
+  });
+  await writeAudit({ actorId: user._id, action: 'USER_CREATED', entity: 'User', entityId: user._id, metadata: { role: 'STUDENT', ...(user.batch ? { batch: user.batch } : {}) } });
   return { user: publicUser(user), token: signToken(user, config) };
 }
 
-async function login({ email, password }, config) {
-  const user = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash +authVersion');
+async function login({ email, password, role }, config) {
+  const user = await User.findOne({ email: email.toLowerCase(), role }).select('+passwordHash +authVersion');
   const passwordMatches = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_PASSWORD_HASH);
   if (!user || !user.isActive || !passwordMatches) throw new AppError('Email or password is incorrect.', 401);
   await writeAudit({ actorId: user._id, action: 'USER_LOGIN', entity: 'User', entityId: user._id });

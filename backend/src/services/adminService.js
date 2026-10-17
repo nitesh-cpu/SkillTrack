@@ -39,11 +39,11 @@ async function listUsersPage({ page = 1, limit = 25, search, role, isActive } = 
   if (isActive !== undefined) filter.isActive = isActive;
   if (search) {
     const expression = new RegExp(escapeRegex(search), 'i');
-    filter.$or = [{ name: expression }, { email: expression }];
+    filter.$or = [{ name: expression }, { email: expression }, { batch: expression }];
   }
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('name email role isActive createdAt updatedAt')
+      .select('name email role isActive batch createdAt updatedAt')
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -64,6 +64,7 @@ function publicUser(user) {
     email: user.email,
     role: user.role,
     isActive: user.isActive,
+    ...(user.batch !== undefined ? { batch: user.batch } : {}),
     createdAt: user.createdAt,
     ...(user.updatedAt ? { updatedAt: user.updatedAt } : {}),
   };
@@ -73,12 +74,19 @@ async function createUser(input, actorId) {
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
   let user;
   try {
-    user = await User.create({ name: input.name, email: input.email, passwordHash, role: input.role, isActive: true });
+    user = await User.create({
+      name: input.name,
+      email: input.email,
+      passwordHash,
+      role: input.role,
+      batch: typeof input.batch === 'string' ? input.batch.trim() : '',
+      isActive: true,
+    });
   } catch (error) {
     if (error.code === 11000) throw new AppError('A user with this email already exists.', 409);
     throw error;
   }
-  await writeAudit({ actorId, action: 'USER_CREATED', entity: 'User', entityId: user._id, metadata: { role: user.role } });
+  await writeAudit({ actorId, action: 'USER_CREATED', entity: 'User', entityId: user._id, metadata: { role: user.role, batch: user.batch } });
   return publicUser(user);
 }
 
@@ -88,7 +96,7 @@ async function updateUser(userId, input, actorId) {
   if (isSelf && ((input.role !== undefined && input.role !== 'ADMIN') || input.isActive === false)) {
     throw new AppError('You cannot remove your own administrator access.', 403);
   }
-  const current = await User.findById(userId).select('role isActive');
+  const current = await User.findById(userId).select('role isActive batch');
   if (!current) throw new AppError('User not found.', 404);
   const isLosingActiveAdmin = current.role === 'ADMIN'
     && current.isActive
@@ -101,13 +109,14 @@ async function updateUser(userId, input, actorId) {
   if (input.email !== undefined) update.email = input.email;
   if (input.isActive !== undefined) update.isActive = input.isActive;
   if (input.role !== undefined) update.role = input.role;
+  if (input.batch !== undefined) update.batch = typeof input.batch === 'string' ? input.batch.trim() : '';
   const updateOperation = { $set: update };
   const accessChanged = (input.isActive !== undefined && input.isActive !== current.isActive)
     || (input.role !== undefined && input.role !== current.role);
   if (accessChanged) updateOperation.$inc = { authVersion: 1 };
   let user;
   try {
-    user = await User.findByIdAndUpdate(userId, updateOperation, { new: true, runValidators: true }).select('name email role isActive createdAt updatedAt');
+    user = await User.findByIdAndUpdate(userId, updateOperation, { new: true, runValidators: true }).select('name email role isActive batch createdAt updatedAt');
   } catch (error) {
     if (error.code === 11000) throw new AppError('A user with this email already exists.', 409);
     throw error;
@@ -118,7 +127,7 @@ async function updateUser(userId, input, actorId) {
     action: input.role !== undefined && input.role !== current.role ? 'USER_ROLE_CHANGED' : user.isActive ? 'USER_UPDATED' : 'USER_DEACTIVATED',
     entity: 'User',
     entityId: user._id,
-    metadata: { isActive: user.isActive, previousRole: current.role, role: user.role },
+    metadata: { isActive: user.isActive, previousRole: current.role, role: user.role, ...(user.batch !== undefined ? { batch: user.batch } : {}) },
   });
   return publicUser(user);
 }
@@ -288,7 +297,7 @@ async function deleteSkillRelationship(relationshipId, actorId) {
 
 async function getUserDirectory() {
   const [users, assignments, latestScores] = await Promise.all([
-    User.find({ role: { $in: ['STUDENT', 'MENTOR'] } }).select('name email role isActive createdAt').sort({ name: 1 }).lean(),
+    User.find({ role: { $in: ['STUDENT', 'MENTOR'] } }).select('name email role isActive batch createdAt').sort({ name: 1 }).lean(),
     MentorStudent.find({}).populate('mentorId', 'name email').populate('studentId', 'name email').lean(),
     SkillScore.aggregate([
       { $sort: { calculatedAt: -1 } },
@@ -304,8 +313,8 @@ async function getUserDirectory() {
     studentCountByMentor.set(mentorId, (studentCountByMentor.get(mentorId) || 0) + 1);
   }
   return {
-    students: users.filter(item => item.role === 'STUDENT').map(student => ({ ...student, mentor: mentorByStudent.get(String(student._id)) || null, progress: progressByStudent.get(String(student._id)) || 0 })),
-    mentors: users.filter(item => item.role === 'MENTOR').map(mentor => ({ ...mentor, studentCount: studentCountByMentor.get(String(mentor._id)) || 0 })),
+    students: users.filter(item => item.role === 'STUDENT').map(student => ({ ...student, batch: student.batch || '', mentor: mentorByStudent.get(String(student._id)) || null, progress: progressByStudent.get(String(student._id)) || 0 })),
+    mentors: users.filter(item => item.role === 'MENTOR').map(mentor => ({ ...mentor, batch: mentor.batch || '', studentCount: studentCountByMentor.get(String(mentor._id)) || 0 })),
   };
 }
 

@@ -3,6 +3,7 @@ jest.mock('../src/models/User', () => ({
   findByIdAndUpdate: jest.fn(),
   findOne: jest.fn(),
   countDocuments: jest.fn(),
+  create: jest.fn(),
 }));
 
 jest.mock('../src/models/MentorStudent', () => ({
@@ -138,5 +139,61 @@ describe('admin access safeguards', () => {
       password: 'hidden',
       nested: { accessToken: 'hidden', details: 'safe' },
     })).toEqual({ action: 'RESET', nested: { details: 'safe' } });
+  });
+
+  test('creating a user with a batch persists the batch and records it in audit metadata', async () => {
+    const created = {
+      _id: 'new-user-id',
+      name: 'Batch Student',
+      email: 'student@example.com',
+      role: 'STUDENT',
+      batch: 'Batch 2026-A',
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    User.create.mockResolvedValue(created);
+    const result = await adminService.createUser({
+      name: 'Batch Student',
+      email: 'student@example.com',
+      password: 'initial-password-123',
+      role: 'STUDENT',
+      batch: 'Batch 2026-A',
+    }, 'admin-id');
+    expect(User.create).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Batch Student',
+      email: 'student@example.com',
+      role: 'STUDENT',
+      batch: 'Batch 2026-A',
+    }));
+    expect(result.batch).toBe('Batch 2026-A');
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'USER_CREATED',
+      metadata: { role: 'STUDENT', batch: 'Batch 2026-A' },
+    }));
+  });
+
+  test('updating a user batch updates the field and includes batch in audit metadata', async () => {
+    User.findById.mockReturnValue({ select: jest.fn().mockResolvedValue({ role: 'STUDENT', isActive: true, batch: 'Old Batch' }) });
+    const saved = {
+      _id: 'user-id',
+      name: 'Student',
+      email: 'student@example.com',
+      role: 'STUDENT',
+      batch: 'Batch 2026-B',
+      isActive: true,
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    };
+    User.findByIdAndUpdate.mockReturnValue({ select: jest.fn().mockResolvedValue(saved) });
+    const result = await adminService.updateUser('user-id', { batch: 'Batch 2026-B' }, 'admin-id');
+    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+      'user-id',
+      { $set: { batch: 'Batch 2026-B' } },
+      { new: true, runValidators: true },
+    );
+    expect(result.batch).toBe('Batch 2026-B');
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'USER_UPDATED',
+      metadata: expect.objectContaining({ batch: 'Batch 2026-B' }),
+    }));
   });
 });

@@ -9,6 +9,7 @@ jest.mock('../src/models/Exam', () => ({
 jest.mock('../src/models/ExamAssignment', () => ({
   find: jest.fn(),
   bulkWrite: jest.fn(),
+  findOneAndUpdate: jest.fn(),
 }));
 
 jest.mock('../src/models/MentorStudent', () => ({
@@ -96,6 +97,27 @@ describe('exam authoring and assignment service', () => {
     expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'EXAM_CREATED' }));
   });
 
+  test('persists the configured secure-exam policy', async () => {
+    const result = await examService.createExam(admin, {
+      ...validExam,
+      security: {
+        requireFullscreen: true,
+        requireCamera: true,
+        requireMicrophone: false,
+        maxViolations: 2,
+        violationAction: 'REVIEW',
+      },
+    });
+
+    expect(result.security).toEqual({
+      requireFullscreen: true,
+      requireCamera: true,
+      requireMicrophone: false,
+      maxViolations: 2,
+      violationAction: 'REVIEW',
+    });
+  });
+
   test('does not create an exam with unapproved or unavailable questions', async () => {
     Question.find.mockReturnValue({
       populate: jest.fn().mockReturnThis(),
@@ -160,5 +182,19 @@ describe('exam authoring and assignment service', () => {
       action: 'EXAM_ASSIGNED',
       metadata: { studentCount: 1 },
     }));
+  });
+
+  test('revokes an assigned exam before the student starts it', async () => {
+    Exam.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue({ _id: '507f1f77bcf86cd799439018' }) });
+    ExamAssignment.findOneAndUpdate.mockResolvedValue({ _id: 'assignment-id', status: 'REVOKED' });
+
+    const result = await examService.revokeExamAssignment(admin, '507f1f77bcf86cd799439018', studentId);
+
+    expect(ExamAssignment.findOneAndUpdate).toHaveBeenCalledWith(
+      { examId: '507f1f77bcf86cd799439018', studentId, status: 'ASSIGNED' },
+      { $set: { status: 'REVOKED' } },
+      { new: true },
+    );
+    expect(result.status).toBe('REVOKED');
   });
 });
